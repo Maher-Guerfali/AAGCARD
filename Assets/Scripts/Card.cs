@@ -1,104 +1,286 @@
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections;
+using UnityEngine.EventSystems;
 
-public class Card : MonoBehaviour
+public class Card : MonoBehaviour,
+    IPointerEnterHandler, IPointerExitHandler,
+    IPointerDownHandler, IPointerUpHandler
 {
-    public int faceId;
-    public Image frontImage;
-    public Image backImage;
+    [Header("Graphics (UI Images)")]
+    public Transform flipRoot;      // child transform that will be flipped (scale X)
+    public Image frontImage;        // inside flipRoot
+    public Image backImage;         // inside flipRoot
+
+    [Header("Flip")]
     public float flipTime = 0.28f;
+
+    [Header("Hover")]
+    public float hoverScale = 1.08f;
+    public float hoverAnimTime = 0.12f;
+
+    [Header("State")]
+    public int faceId;
     public bool IsMatched { get; private set; } = false;
     public bool IsRevealed { get; private set; } = false;
 
-    private bool isAnimating = false;
+    // Internal state
+    private bool isFlipping = false;
+    private bool isClickAnimating = false;
+    private bool isInteractable = true;
+    private bool isHovered = false;
+    private Vector3 baseScale;
+    private Coroutine currentScaleAnimation;
+
+    void Awake()
+    {
+        baseScale = transform.localScale;
+        if (flipRoot == null)
+            flipRoot = transform;
+    }
 
     public void Initialize(int id, Sprite frontSprite, Sprite backSprite)
     {
         faceId = id;
-        frontImage.sprite = frontSprite;
-        backImage.sprite = backSprite;
+        if (frontImage) frontImage.sprite = frontSprite;
+        if (backImage) backImage.sprite = backSprite;
+
         IsMatched = false;
         IsRevealed = false;
-        transform.localScale = Vector3.one;
-        frontImage.gameObject.SetActive(false);
-        backImage.gameObject.SetActive(true);
+        isFlipping = false;
+        isClickAnimating = false;
+        isInteractable = true;
+        isHovered = false;
+
+        transform.localScale = baseScale;
+        if (flipRoot != null) flipRoot.localScale = Vector3.one;
+        if (frontImage) frontImage.gameObject.SetActive(false);
+        if (backImage) backImage.gameObject.SetActive(true);
+
+        StopAllAnimations();
     }
 
     public void OnClicked()
     {
-        if (isAnimating || IsMatched) return;
-        if (IsRevealed) return;
-        Reveal();
-        GameManager.Instance.RegisterFlip(this);
-        SoundManager.Instance.PlayFlip();
+        if (!CanClick()) return;
+
+        StartCoroutine(HandleClick());
+
+        // Notify game manager
+        if (GameManager.Instance != null)
+            GameManager.Instance.RegisterFlip(this);
+        if (SoundManager.Instance != null)
+            SoundManager.Instance.PlayFlip();
     }
 
+    private bool CanClick()
+    {
+        return isInteractable && !isFlipping && !isClickAnimating && !IsMatched && !IsRevealed;
+    }
+
+    private IEnumerator HandleClick()
+    {
+        isClickAnimating = true;
+        isInteractable = false;
+
+        // Flip the card to reveal
+        yield return StartCoroutine(FlipCard(true));
+
+        isClickAnimating = false;
+        // Don't set interactable back to true here - let game manager handle it
+    }
+
+    // Called by GameManager when cards match
+    public void MarkMatched()
+    {
+        IsMatched = true;
+        isInteractable = false;
+
+        // Return to base scale smoothly
+        AnimateToScale(baseScale, 0.25f);
+    }
+
+    // Called by GameManager when cards don't match
+    public void HideAfterMismatch()
+    {
+        StartCoroutine(HandleMismatch());
+    }
+
+
+    private IEnumerator HandleMismatch()
+    {
+        // Wait a moment, then flip back
+        yield return new WaitForSeconds(1.0f);
+
+        // Flip back to hide
+        yield return StartCoroutine(FlipCard(false));
+
+        // Re-enable interaction
+        isInteractable = true;
+
+        // Apply hover state if still hovered
+        if (isHovered)
+        {
+            AnimateToScale(baseScale * hoverScale, hoverAnimTime);
+        }
+        else
+        {
+            AnimateToScale(baseScale, hoverAnimTime);
+        }
+    }
+
+    // Main flip animation
+    private IEnumerator FlipCard(bool showFront)
+    {
+        isFlipping = true;
+
+        float halfTime = flipTime * 0.5f;
+
+        // First half: scale X down to 0
+        yield return StartCoroutine(FlipToEdge());
+
+        // Swap the visuals at the edge
+        if (frontImage) frontImage.gameObject.SetActive(showFront);
+        if (backImage) backImage.gameObject.SetActive(!showFront);
+        IsRevealed = showFront;
+
+        // Second half: scale X back to 1
+        yield return StartCoroutine(FlipFromEdge());
+
+        isFlipping = false;
+    }
+
+    private IEnumerator FlipToEdge()
+    {
+        float halfTime = flipTime * 0.5f;
+        float t = 0f;
+        Vector3 startScale = flipRoot.localScale;
+
+        while (t < halfTime)
+        {
+            t += Time.deltaTime;
+            float progress = t / halfTime;
+            float easedProgress = 1f - Mathf.Pow(1f - progress, 3f); // Ease out
+
+            float scaleX = Mathf.Lerp(startScale.x, 0f, easedProgress);
+            flipRoot.localScale = new Vector3(scaleX, startScale.y, startScale.z);
+
+            yield return null;
+        }
+
+        flipRoot.localScale = new Vector3(0f, startScale.y, startScale.z);
+    }
+
+    private IEnumerator FlipFromEdge()
+    {
+        float halfTime = flipTime * 0.5f;
+        float t = 0f;
+        Vector3 currentScale = flipRoot.localScale;
+
+        while (t < halfTime)
+        {
+            t += Time.deltaTime;
+            float progress = t / halfTime;
+            float easedProgress = Mathf.Pow(progress, 0.7f); // Ease in
+
+            float scaleX = Mathf.Lerp(0f, 1f, easedProgress);
+            flipRoot.localScale = new Vector3(scaleX, currentScale.y, currentScale.z);
+
+            yield return null;
+        }
+
+        flipRoot.localScale = Vector3.one;
+    }
+
+    // Hover handlers
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (!CanHover()) return;
+
+        isHovered = true;
+        AnimateToScale(baseScale * hoverScale, hoverAnimTime);
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        isHovered = false;
+
+        if (!CanHover()) return;
+
+        AnimateToScale(baseScale, hoverAnimTime);
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        // Just visual feedback, no scaling change
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (CanClick())
+        {
+            OnClicked();
+        }
+    }
+
+    private bool CanHover()
+    {
+        return isInteractable && !isFlipping && !isClickAnimating && !IsMatched;
+    }
+
+    // Scale animation helper
+    private void AnimateToScale(Vector3 targetScale, float duration)
+    {
+        if (currentScaleAnimation != null)
+        {
+            StopCoroutine(currentScaleAnimation);
+        }
+
+        currentScaleAnimation = StartCoroutine(ScaleAnimation(targetScale, duration));
+    }
+
+    private IEnumerator ScaleAnimation(Vector3 targetScale, float duration)
+    {
+        Vector3 startScale = transform.localScale;
+        float t = 0f;
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float progress = Mathf.Clamp01(t / duration);
+            float easedProgress = 1f - Mathf.Pow(1f - progress, 3f); // Ease out
+
+            transform.localScale = Vector3.Lerp(startScale, targetScale, easedProgress);
+            yield return null;
+        }
+
+        transform.localScale = targetScale;
+        currentScaleAnimation = null;
+    }
+
+    private void StopAllAnimations()
+    {
+        if (currentScaleAnimation != null)
+        {
+            StopCoroutine(currentScaleAnimation);
+            currentScaleAnimation = null;
+        }
+    }
+
+    // Public methods for game manager
     public void Reveal()
     {
-        if (isAnimating || IsRevealed) return;
-        StartCoroutine(Flip(true));
+        if (!isFlipping && !IsRevealed && !IsMatched)
+        {
+            StartCoroutine(FlipCard(true));
+        }
     }
 
     public void HideInstant()
     {
-        if (IsMatched) return;
-        StartCoroutine(Flip(false));
-    }
-
-    public void MarkMatched()
-    {
-        IsMatched = true;
-        // small animation or disable interaction
-        // keep revealed
-        StartCoroutine(MatchAnim());
-    }
-
-    private IEnumerator MatchAnim()
-    {
-        // pop scale then disable collider
-        var tr = transform;
-        Vector3 target = tr.localScale * 1.08f;
-        float t = 0f;
-        while (t < 0.12f)
+        if (!IsMatched && IsRevealed)
         {
-            t += Time.deltaTime;
-            tr.localScale = Vector3.Lerp(tr.localScale, target, t / 0.12f);
-            yield return null;
+            StartCoroutine(FlipCard(false));
         }
-        yield return new WaitForSeconds(0.08f);
-        // optionally remove or fade
-    }
-
-    private IEnumerator Flip(bool showFront)
-    {
-        isAnimating = true;
-        float t = 0f;
-        var start = transform.localScale.x;
-        // we will scale X to simulate flip - cleaner than rotating in UI space
-        while (t < flipTime)
-        {
-            t += Time.deltaTime;
-            float p = Mathf.Clamp01(t / flipTime);
-            float s = Mathf.Lerp(start, 0.001f, p);
-            transform.localScale = new Vector3(s, 1, 1);
-            yield return null;
-        }
-
-        // swap visible images
-        frontImage.gameObject.SetActive(showFront);
-        backImage.gameObject.SetActive(!showFront);
-        IsRevealed = showFront;
-
-        t = 0f;
-        while (t < flipTime)
-        {
-            t += Time.deltaTime;
-            float p = Mathf.Clamp01(t / flipTime);
-            float s = Mathf.Lerp(0.001f, 1f, p);
-            transform.localScale = new Vector3(s, 1, 1);
-            yield return null;
-        }
-        isAnimating = false;
     }
 }

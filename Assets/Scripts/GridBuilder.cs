@@ -5,15 +5,14 @@ using System.Linq;
 public class GridBuilder : MonoBehaviour
 {
     [Header("Data")]
-    public CardSet cardSet;           // ScriptableObject with card faces + back
-    public GameSettings settings;     // ScriptableObject with rows, cols, etc.
+    public CardSet cardSet;       // ScriptableObject with front/back sprites
+    public GameSettings settings; // rows, cols, pairSize, etc.
 
     private List<Card> cards = new List<Card>();
 
     /// <summary>
-    /// Builds a new grid of cards inside the given container.
+    /// Builds a new grid of cards inside the given container using CardSet sprites.
     /// </summary>
-    // Remove int rows parameter
     public void BuildGrid(Card cardPrefab, RectTransform container)
     {
         ClearGrid();
@@ -21,34 +20,40 @@ public class GridBuilder : MonoBehaviour
         int total = settings.rows * settings.cols;
 
         if (total % settings.pairSize != 0)
-            Debug.LogWarning("Grid size not divisible by pair size, some cards may not match.");
+            Debug.LogWarning("Grid size not divisible by pairSize, some cards may not match.");
 
         // --- prepare deck
-        List<CardData> pool = new List<CardData>();
+        List<int> poolIds = new List<int>();
         int groupCount = total / settings.pairSize;
 
         for (int i = 0; i < groupCount; i++)
         {
-            var cd = cardSet.cards[i % cardSet.cards.Count];
             for (int j = 0; j < settings.pairSize; j++)
-                pool.Add(cd);
+                poolIds.Add(i); // assign same ID for pair/triplet
         }
 
-        Shuffle(pool);
+        Shuffle(poolIds);
 
         // --- instantiate cards
-        foreach (var cd in pool)
+        for (int i = 0; i < total; i++)
         {
             var c = Instantiate(cardPrefab, container);
-            c.Initialize(cd.id, cd.faceSprite, cardSet.backSprite);
+            int id = poolIds[i];
+            Sprite frontSprite = cardSet.frontSprites[id % cardSet.frontSprites.Count];
+
+            c.Initialize(id, frontSprite, cardSet.backSprite);
             cards.Add(c);
+        }
+
+        // optional: setup GridLayoutGroup constraints if using UI
+        var layout = container.GetComponent<UnityEngine.UI.GridLayoutGroup>();
+        if (layout != null)
+        {
+            layout.constraint = UnityEngine.UI.GridLayoutGroup.Constraint.FixedColumnCount;
+            layout.constraintCount = settings.cols;
         }
     }
 
-
-    /// <summary>
-    /// Capture the current state into a serializable GameState.
-    /// </summary>
     public GameState CaptureState(int score, int combo)
     {
         GameState s = new GameState
@@ -67,14 +72,10 @@ public class GridBuilder : MonoBehaviour
         return s;
     }
 
-    /// <summary>
-    /// Restore game state (cards, matched/revealed, score/combo handled in GameManager).
-    /// </summary>
     public void RestoreState(GameState state)
     {
         if (state == null || state.cards == null) return;
 
-        // If grid size differs, rebuild grid
         if (state.rows != settings.rows || state.cols != settings.cols)
         {
             Debug.Log("Saved state grid does not match current settings. Rebuilding grid.");
@@ -92,25 +93,19 @@ public class GridBuilder : MonoBehaviour
         for (int i = 0; i < cards.Count; i++)
         {
             var cs = state.cards[i];
-            var cd = cardSet.cards[cs.faceId % cardSet.cards.Count];
-            cards[i].Initialize(cd.id, cd.faceSprite, cardSet.backSprite);
+            Sprite frontSprite = cardSet.frontSprites[cs.faceId % cardSet.frontSprites.Count];
+            cards[i].Initialize(cs.faceId, frontSprite, cardSet.backSprite);
 
             if (cs.isRevealed) cards[i].Reveal();
             if (cs.isMatched) cards[i].MarkMatched();
         }
     }
 
-    /// <summary>
-    /// Returns true if all cards are matched.
-    /// </summary>
     public bool AllMatched()
     {
         return cards.All(c => c.IsMatched);
     }
 
-    /// <summary>
-    /// Destroy existing cards and clear list.
-    /// </summary>
     public void ClearGrid()
     {
         foreach (var c in cards)
@@ -120,9 +115,6 @@ public class GridBuilder : MonoBehaviour
         cards.Clear();
     }
 
-    /// <summary>
-    /// Fisher-Yates shuffle.
-    /// </summary>
     private void Shuffle<T>(List<T> list)
     {
         for (int i = 0; i < list.Count; i++)

@@ -1,9 +1,9 @@
-using System.Collections.Generic;
 using UnityEngine;
+using System.Collections.Generic;
 
-[CreateAssetMenu(fileName = "CardSet", menuName = "Card Match/Card Set", order = 1)]
+[CreateAssetMenu(fileName = "CardSet", menuName = "Card Game/CardSet")]
 public class CardSet : ScriptableObject
 {
-    public List<CardData> cards;
-    public Sprite backSprite;
+    public List<Sprite> frontSprites; // all front images
+    public Sprite backSprite;         // shared back
 }
