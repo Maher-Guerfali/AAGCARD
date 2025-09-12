@@ -252,10 +252,10 @@ public class GridBuilder : MonoBehaviour
     }
 
     // Helper method for testing different grid sizes in editor
-    [ContextMenu("Test Small Grid (3x4)")]
+    [ContextMenu("Test Small Grid (2x2)")]
     public void TestSmallGrid()
     {
-        UpdateGridSize(3, 4);
+        UpdateGridSize(2, 2);
     }
 
     [ContextMenu("Test Large Grid (6x5)")]

@@ -16,14 +16,23 @@ public class GameManager : MonoBehaviour
     [Range(0.1f, 2f)] public float revealDelay = 0.8f;
     [Min(2)] public int pairSize = 2;
 
+    [Header("Preview Settings")]
+    [SerializeField] private float previewDuration = 3f;
+    [SerializeField] private bool enablePreview = true;
+
     [Header("Score")]
     public int score = 0;
     public int combo = 0;
     public UIManager uiManager;
 
+    [Header("Menu Integration")]
+    public MenuManager menuManager;
+
     // Gameplay state
     private readonly Queue<Card> compareQueue = new Queue<Card>();
     private bool comparing = false;
+    private bool gameStarted = false;
+    private bool previewActive = false;
 
     private void Awake()
     {
@@ -33,13 +42,19 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
-        StartNewGame();
+        // Don't auto-start the game - let the menu handle it
+        if (menuManager == null)
+        {
+            StartNewGame(); // Fallback for testing without menu
+        }
     }
 
     public void StartNewGame()
     {
         score = 0;
         combo = 0;
+        gameStarted = false;
+        previewActive = false;
         uiManager?.UpdateScore(score, combo);
 
         // Clear any pending comparisons
@@ -47,10 +62,85 @@ public class GameManager : MonoBehaviour
         comparing = false;
 
         gridBuilder.BuildGrid(cardPrefab, gridContainer);
+        gameStarted = true;
+    }
+
+    /// <summary>
+    /// Starts a new game with a 3-second preview of all cards
+    /// </summary>
+    public void StartNewGameWithPreview()
+    {
+        score = 0;
+        combo = 0;
+        gameStarted = false;
+        previewActive = true;
+        uiManager?.UpdateScore(score, combo);
+
+        // Clear any pending comparisons
+        compareQueue.Clear();
+        comparing = false;
+
+        gridBuilder.BuildGrid(cardPrefab, gridContainer);
+
+        if (enablePreview)
+        {
+            StartCoroutine(ShowPreviewThenStart());
+        }
+        else
+        {
+            gameStarted = true;
+            previewActive = false;
+        }
+    }
+
+    private IEnumerator ShowPreviewThenStart()
+    {
+        Debug.Log("Starting card preview...");
+
+        // Get all cards and reveal them
+        var allCards = FindObjectsOfType<Card>();
+        foreach (var card in allCards)
+        {
+            if (!card.IsRevealed)
+            {
+                card.Reveal();
+            }
+        }
+
+        // Show preview message if UI supports it
+        uiManager?.SetInteractable(false);
+
+        // Wait for preview duration
+        yield return new WaitForSeconds(previewDuration);
+
+        Debug.Log("Preview ended, hiding cards...");
+
+        // Hide all cards
+        foreach (var card in allCards)
+        {
+            if (!card.IsMatched)
+            {
+                card.HideInstant();
+            }
+        }
+
+        // Enable game interaction
+        previewActive = false;
+        gameStarted = true;
+        uiManager?.SetInteractable(true);
+
+        Debug.Log("Game started!");
     }
 
     public void RegisterFlip(Card card)
     {
+        // Don't register flips during preview or before game starts
+        if (!gameStarted || previewActive)
+        {
+            Debug.Log($"RegisterFlip ignored - game not started or preview active");
+            return;
+        }
+
         Debug.Log($"RegisterFlip called for card {card.faceId}. IsRevealed: {card.IsRevealed}, IsMatched: {card.IsMatched}");
 
         // Only register if card is actually revealed and not matched
@@ -119,7 +209,7 @@ public class GameManager : MonoBehaviour
                 if (SoundManager.Instance != null)
                     SoundManager.Instance.PlayMatch();
 
-                uiManager?.ShowMatchEffect(group, gainedPoints, combo);
+               
             }
             else
             {
@@ -148,6 +238,7 @@ public class GameManager : MonoBehaviour
                 if (SoundManager.Instance != null)
                     SoundManager.Instance.PlayGameOver();
                 uiManager?.ShowGameOver(score);
+                gameStarted = false; // Prevent further interactions
                 break;
             }
         }
@@ -175,9 +266,76 @@ public class GameManager : MonoBehaviour
 
     public void LoadState(GameState state)
     {
-        score = state.score;
-        combo = state.combo;
-        uiManager?.UpdateScore(score, combo);
+        // Use 'this.' to explicitly reference the class fields
+        this.score = state.score;
+        this.combo = state.combo;
+        gameStarted = true;
+        previewActive = false;
+        uiManager?.UpdateScore(this.score, this.combo);
         gridBuilder.RestoreState(state);
     }
+
+    // --- Public Properties for UI ---
+    public bool IsGameStarted => gameStarted;
+    public bool IsPreviewActive => previewActive;
+
+    // --- Menu Integration Methods ---
+    public void ReturnToMenu()
+    {
+        gameStarted = false;
+        previewActive = false;
+        comparing = false;
+        compareQueue.Clear();
+
+        if (menuManager != null)
+        {
+            menuManager.ReturnToMenu();
+        }
+    }
+
+    // --- Preview Control Methods ---
+    public void SetPreviewEnabled(bool enabled)
+    {
+        enablePreview = enabled;
+    }
+
+    public void SetPreviewDuration(float duration)
+    {
+        previewDuration = Mathf.Clamp(duration, 1f, 10f);
+    }
+
+    // --- Debug Methods ---
+#if UNITY_EDITOR
+    [ContextMenu("Start Game With Preview")]
+    private void DebugStartWithPreview()
+    {
+        StartNewGameWithPreview();
+    }
+
+    [ContextMenu("Start Game Without Preview")]
+    private void DebugStartWithoutPreview()
+    {
+        StartNewGame();
+    }
+
+    [ContextMenu("Force End Preview")]
+    private void DebugEndPreview()
+    {
+        if (previewActive)
+        {
+            StopAllCoroutines();
+            previewActive = false;
+            gameStarted = true;
+
+            var allCards = FindObjectsOfType<Card>();
+            foreach (var card in allCards)
+            {
+                if (!card.IsMatched)
+                {
+                    card.HideInstant();
+                }
+            }
+        }
+    }
+#endif
 }
