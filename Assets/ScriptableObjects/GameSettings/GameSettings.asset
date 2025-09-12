@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b04c979f152a56b499c189b12b1c5f11, type: 3}
   m_Name: GameSettings
   m_EditorClassIdentifier: 
-  rows: 4
-  cols: 4
+  rows: 2
+  cols: 2
   revealDelay: 0.8
   baseScore: 100
   comboMultiplier: 100

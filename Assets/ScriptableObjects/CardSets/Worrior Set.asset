@@ -12,5 +12,29 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3940b48b73f0c4d44b2334f6bca3b8a0, type: 3}
   m_Name: Worrior Set
   m_EditorClassIdentifier: 
-  cards: []
-  backSprite: {fileID: 0}
+  frontSprites:
+  - {fileID: 1345829269, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 499429184, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 336058574, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 1560984478, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -339220404, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -1066231342, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -2131820311, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 363631032, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -1355672152, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -1468556305, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 299932990, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 319814954, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -690007356, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 981379978, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 268069909, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -747703665, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 427397559, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 1945346365, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 1895084988, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 1354658012, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -819899925, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -1869794323, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: -110298371, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  - {fileID: 357584080, guid: 49d5720c9fafef04ca5d552cb2d90924, type: 3}
+  backSprite: {fileID: 21300000, guid: d47b1ea65fd2a4c4e9ae77398dfb77e0, type: 3}

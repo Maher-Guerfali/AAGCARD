@@ -1,38 +1,37 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using System.Linq;
+using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    [Header("Game")]
+    [Header("Game Settings")]
     public GridBuilder gridBuilder;
     public Card cardPrefab;
-    public RectTransform gridContainer; // UI container or empty gameobject
-    public int rows = 4;
-    public int cols = 4;
-    public float revealDelay = 0.8f;
-    public int pairSize = 2; // number of cards per match (2 for classic)
-
-    // gameplay state
-    private List<Card> flippedQueue = new List<Card>();
-    private Queue<Card> compareQueue = new Queue<Card>();
-    private bool comparing = false;
+    public RectTransform gridContainer;
+    [Min(1)] public int rows = 4;
+    [Min(1)] public int cols = 4;
+    [Range(0.1f, 2f)] public float revealDelay = 0.8f;
+    [Min(2)] public int pairSize = 2;
 
     [Header("Score")]
     public int score = 0;
     public int combo = 0;
     public UIManager uiManager;
 
-    void Awake()
+    // Gameplay state
+    private readonly Queue<Card> compareQueue = new Queue<Card>();
+    private bool comparing = false;
+
+    private void Awake()
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
     }
 
-    void Start()
+    private void Start()
     {
         StartNewGame();
     }
@@ -42,79 +41,133 @@ public class GameManager : MonoBehaviour
         score = 0;
         combo = 0;
         uiManager?.UpdateScore(score, combo);
-        gridBuilder.BuildGrid(cardPrefab, gridContainer); 
+
+        // Clear any pending comparisons
+        compareQueue.Clear();
+        comparing = false;
+
+        gridBuilder.BuildGrid(cardPrefab, gridContainer);
     }
-
-
-
 
     public void RegisterFlip(Card card)
     {
-        // allow flipping at any time; just queue for comparison
+        Debug.Log($"RegisterFlip called for card {card.faceId}. IsRevealed: {card.IsRevealed}, IsMatched: {card.IsMatched}");
+
+        // Only register if card is actually revealed and not matched
+        if (!card.IsRevealed || card.IsMatched)
+        {
+            Debug.Log($"Card {card.faceId} registration skipped - not revealed or already matched");
+            return;
+        }
+
+        // Add the flipped card to the queue
         compareQueue.Enqueue(card);
-        if (!comparing) StartCoroutine(ProcessComparisons());
+        Debug.Log($"Card {card.faceId} added to queue. Queue count: {compareQueue.Count}");
+
+        // Start comparison routine if not already running
+        if (!comparing)
+        {
+            Debug.Log("Starting comparison process");
+            StartCoroutine(ProcessComparisons());
+        }
     }
 
     private IEnumerator ProcessComparisons()
     {
         comparing = true;
+
         while (compareQueue.Count >= pairSize)
         {
+            Debug.Log($"Processing comparison with {compareQueue.Count} cards in queue");
+
+            // Collect group of flipped cards
             var group = new List<Card>();
             for (int i = 0; i < pairSize; i++)
-                group.Add(compareQueue.Dequeue());
+            {
+                if (compareQueue.Count > 0)
+                    group.Add(compareQueue.Dequeue());
+            }
 
-            // if any in group were already matched or currently locked, skip them
+            Debug.Log($"Collected {group.Count} cards for comparison");
+
+            // Skip if invalid (already matched or flipped back)
             if (group.Any(c => c.IsMatched || !c.IsRevealed))
+            {
+                Debug.Log("Skipping group - some cards are matched or not revealed");
                 continue;
+            }
 
-            // Wait small buffer for visuals if user keeps flipping
+            // Small delay for visuals
             yield return new WaitForSeconds(0.15f);
 
+            // Check match
             bool isMatch = IsMatch(group);
+            Debug.Log($"Match result: {isMatch} for cards with IDs: {string.Join(", ", group.Select(c => c.faceId))}");
+
             if (isMatch)
             {
+                // MATCH - Mark all cards as matched
                 foreach (var c in group)
-                {
                     c.MarkMatched();
-                }
+
                 combo++;
-                int gained = 100 * combo;
-                score += gained;
-                SoundManager.Instance.PlayMatch();
-                uiManager?.ShowMatchEffect(group, gained, combo);
+                int gainedPoints = 100 * combo;
+                score += gainedPoints;
+
+                Debug.Log($"Match! Score: {score}, Combo: {combo}");
+
+                if (SoundManager.Instance != null)
+                    SoundManager.Instance.PlayMatch();
+
+                uiManager?.ShowMatchEffect(group, gainedPoints, combo);
             }
             else
             {
+                // MISMATCH - Reset combo and hide cards after delay
                 combo = 0;
-                SoundManager.Instance.PlayMismatch();
-                yield return new WaitForSeconds(revealDelay);
+                Debug.Log($"Mismatch! Cards will flip back. Combo reset to 0");
+
+                if (SoundManager.Instance != null)
+                    SoundManager.Instance.PlayMismatch();
+
+                // Use the proper HideAfterMismatch method
                 foreach (var c in group)
                 {
-                    if (!c.IsMatched) c.HideInstant();
+                    if (!c.IsMatched)
+                        c.HideAfterMismatch();
                 }
             }
 
+            // Update score after each check
             uiManager?.UpdateScore(score, combo);
 
-            // check end condition
+            // Check end condition
             if (gridBuilder.AllMatched())
             {
-                SoundManager.Instance.PlayGameOver();
+                Debug.Log("All cards matched! Game over.");
+                if (SoundManager.Instance != null)
+                    SoundManager.Instance.PlayGameOver();
                 uiManager?.ShowGameOver(score);
+                break;
             }
         }
+
         comparing = false;
+        Debug.Log("Comparison process ended");
     }
 
     private bool IsMatch(List<Card> group)
     {
-        if (!group.Any()) return false;
-        var id = group[0].faceId;
-        return group.All(c => c.faceId == id);
+        if (group.Count == 0) return false;
+
+        int id = group[0].faceId;
+        bool match = group.All(c => c.faceId == id);
+
+        Debug.Log($"Checking match for {group.Count} cards. Reference ID: {id}, All match: {match}");
+        return match;
     }
 
-    // Save current state
+    // --- Game State Saving & Loading ---
     public GameState CaptureState()
     {
         return gridBuilder.CaptureState(score, combo);

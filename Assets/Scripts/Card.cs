@@ -31,6 +31,7 @@ public class Card : MonoBehaviour,
     private bool isHovered = false;
     private Vector3 baseScale;
     private Coroutine currentScaleAnimation;
+    private Coroutine mismatchCoroutine;
 
     void Awake()
     {
@@ -64,18 +65,15 @@ public class Card : MonoBehaviour,
     {
         if (!CanClick()) return;
 
+        Debug.Log($"Card {faceId} clicked");
         StartCoroutine(HandleClick());
-
-        // Notify game manager
-        if (GameManager.Instance != null)
-            GameManager.Instance.RegisterFlip(this);
-        if (SoundManager.Instance != null)
-            SoundManager.Instance.PlayFlip();
     }
 
     private bool CanClick()
     {
-        return isInteractable && !isFlipping && !isClickAnimating && !IsMatched && !IsRevealed;
+        bool canClick = isInteractable && !isFlipping && !isClickAnimating && !IsMatched && !IsRevealed;
+        Debug.Log($"Card {faceId} CanClick: {canClick} (interactable:{isInteractable}, flipping:{isFlipping}, clickAnim:{isClickAnimating}, matched:{IsMatched}, revealed:{IsRevealed})");
+        return canClick;
     }
 
     private IEnumerator HandleClick()
@@ -83,8 +81,23 @@ public class Card : MonoBehaviour,
         isClickAnimating = true;
         isInteractable = false;
 
+        // Stop any ongoing mismatch coroutine
+        if (mismatchCoroutine != null)
+        {
+            StopCoroutine(mismatchCoroutine);
+            mismatchCoroutine = null;
+        }
+
         // Flip the card to reveal
         yield return StartCoroutine(FlipCard(true));
+
+        // Play sound
+        if (SoundManager.Instance != null)
+            SoundManager.Instance.PlayFlip();
+
+        // Notify game manager AFTER the flip is complete
+        if (GameManager.Instance != null)
+            GameManager.Instance.RegisterFlip(this);
 
         isClickAnimating = false;
         // Don't set interactable back to true here - let game manager handle it
@@ -93,6 +106,7 @@ public class Card : MonoBehaviour,
     // Called by GameManager when cards match
     public void MarkMatched()
     {
+        Debug.Log($"Card {faceId} marked as matched");
         IsMatched = true;
         isInteractable = false;
 
@@ -103,9 +117,13 @@ public class Card : MonoBehaviour,
     // Called by GameManager when cards don't match
     public void HideAfterMismatch()
     {
-        StartCoroutine(HandleMismatch());
+        Debug.Log($"Card {faceId} hiding after mismatch");
+        if (mismatchCoroutine != null)
+        {
+            StopCoroutine(mismatchCoroutine);
+        }
+        mismatchCoroutine = StartCoroutine(HandleMismatch());
     }
-
 
     private IEnumerator HandleMismatch()
     {
@@ -127,6 +145,9 @@ public class Card : MonoBehaviour,
         {
             AnimateToScale(baseScale, hoverAnimTime);
         }
+
+        mismatchCoroutine = null;
+        Debug.Log($"Card {faceId} ready for interaction again");
     }
 
     // Main flip animation
@@ -148,6 +169,7 @@ public class Card : MonoBehaviour,
         yield return StartCoroutine(FlipFromEdge());
 
         isFlipping = false;
+        Debug.Log($"Card {faceId} flip complete. IsRevealed: {IsRevealed}");
     }
 
     private IEnumerator FlipToEdge()
@@ -265,6 +287,11 @@ public class Card : MonoBehaviour,
             StopCoroutine(currentScaleAnimation);
             currentScaleAnimation = null;
         }
+        if (mismatchCoroutine != null)
+        {
+            StopCoroutine(mismatchCoroutine);
+            mismatchCoroutine = null;
+        }
     }
 
     // Public methods for game manager
@@ -278,9 +305,59 @@ public class Card : MonoBehaviour,
 
     public void HideInstant()
     {
+        Debug.Log($"Card {faceId} hide instant called");
         if (!IsMatched && IsRevealed)
         {
-            StartCoroutine(FlipCard(false));
+            // Stop any ongoing mismatch coroutine
+            if (mismatchCoroutine != null)
+            {
+                StopCoroutine(mismatchCoroutine);
+                mismatchCoroutine = null;
+            }
+
+            // Immediately reset visuals
+            if (frontImage) frontImage.gameObject.SetActive(false);
+            if (backImage) backImage.gameObject.SetActive(true);
+            IsRevealed = false;
+
+            // Reset flip root scale
+            if (flipRoot != null) flipRoot.localScale = Vector3.one;
+
+            // Re-enable interaction
+            isInteractable = true;
+
+            // Apply hover state if still hovered
+            if (isHovered)
+            {
+                AnimateToScale(baseScale * hoverScale, hoverAnimTime);
+            }
+            else
+            {
+                AnimateToScale(baseScale, hoverAnimTime);
+            }
+
+            Debug.Log($"Card {faceId} reset to initial state");
         }
+    }
+
+    public void ResetCard()
+    {
+        // Stop all ongoing coroutines
+        StopAllAnimations();
+
+        IsMatched = false;
+        IsRevealed = false;
+        isFlipping = false;
+        isClickAnimating = false;
+        isInteractable = true;
+        isHovered = false;
+
+        // Reset visuals
+        if (frontImage) frontImage.gameObject.SetActive(false);
+        if (backImage) backImage.gameObject.SetActive(true);
+
+        // Reset scales
+        transform.localScale = baseScale;
+        if (flipRoot != null) flipRoot.localScale = Vector3.one;
     }
 }

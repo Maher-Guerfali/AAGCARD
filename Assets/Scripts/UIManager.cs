@@ -1,11 +1,12 @@
+using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections.Generic;
 
 public class UIManager : MonoBehaviour
 {
-    public Text scoreText;
-    public Text comboText;
+    public TMP_Text scoreText; // Change from 'TMPro scoreText' to 'TMP_Text scoreText'
+    public TMP_Text comboText;
     public GameObject gameOverPanel;
 
     public void UpdateScore(int score, int combo)
