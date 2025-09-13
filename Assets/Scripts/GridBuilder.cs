@@ -200,32 +200,60 @@ public class GridBuilder : MonoBehaviour
         return s;
     }
 
+    // Replace the RestoreState method in your GridBuilder with this updated version:
+
+    // Replace the RestoreState method in your GridBuilder with this updated version:
+
     public void RestoreState(GameState state)
     {
-        if (state == null || state.cards == null) return;
-
-        if (state.rows != settings.rows || state.cols != settings.cols)
+        if (state == null || state.cards == null)
         {
-            Debug.Log("Saved state grid does not match current settings. Rebuilding grid.");
-            settings.rows = state.rows;
-            settings.cols = state.cols;
-            BuildGrid(GameManager.Instance.cardPrefab, GameManager.Instance.gridContainer);
-        }
-
-        if (state.cards.Count != cards.Count)
-        {
-            Debug.LogWarning("Card count mismatch when restoring state.");
+            Debug.LogError("Cannot restore state: state or cards is null");
             return;
         }
 
-        for (int i = 0; i < cards.Count; i++)
+        Debug.Log($"Restoring state for {cards.Count} cards, saved states: {state.cards.Count}");
+
+        // If grid size doesn't match, we already rebuilt in LoadState, so cards should match
+        if (state.cards.Count != cards.Count)
         {
-            var cs = state.cards[i];
-            Sprite frontSprite = cardSet.frontSprites[cs.faceId % cardSet.frontSprites.Count];
-            cards[i].Initialize(cs.faceId, frontSprite, cardSet.backSprite);
-            if (cs.isRevealed) cards[i].Reveal();
-            if (cs.isMatched) cards[i].MarkMatched();
+            Debug.LogError($"Card count mismatch: Expected {state.cards.Count}, but have {cards.Count} cards");
+            return;
         }
+
+        // Apply saved states to the existing cards
+        for (int i = 0; i < cards.Count && i < state.cards.Count; i++)
+        {
+            var cardState = state.cards[i];
+            var card = cards[i];
+
+            Debug.Log($"Restoring card {i}: faceId={cardState.faceId}, revealed={cardState.isRevealed}, matched={cardState.isMatched}");
+
+            // Re-initialize the card with correct face ID and sprites
+            Sprite frontSprite = cardSet.frontSprites[cardState.faceId % cardSet.frontSprites.Count];
+            card.Initialize(cardState.faceId, frontSprite, cardSet.backSprite);
+
+            // Apply the saved state - order matters!
+            if (cardState.isMatched)
+            {
+                // For matched cards: first reveal them, then mark as matched
+                card.Reveal(); // Show the front face
+                card.MarkMatched(); // Mark as matched (should keep them visible and uninteractable)
+                Debug.Log($"Card {i} restored as MATCHED and VISIBLE");
+            }
+            else if (cardState.isRevealed)
+            {
+                card.Reveal(); // Show the front face for currently revealed cards
+                Debug.Log($"Card {i} restored as REVEALED");
+            }
+            else
+            {
+                card.HideInstant(); // Make sure it's face down
+                Debug.Log($"Card {i} restored as HIDDEN");
+            }
+        }
+
+        Debug.Log("Card states restored successfully");
     }
 
     public bool AllMatched()

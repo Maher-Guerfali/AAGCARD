@@ -20,8 +20,7 @@ public class MenuManager : MonoBehaviour
     public Button settingsButton;
     public Button backToMenuButton;
     public Button quitButton;
-
-  
+    public Button loadGameButton; // ADD THIS BUTTON REFERENCE
 
     [Header("Grid Constraints")]
     [SerializeField] private int minRows = 2;
@@ -39,6 +38,7 @@ public class MenuManager : MonoBehaviour
         SetupButtonListeners();
         LoadSettings();
         ShowMainMenu();
+        UpdateLoadButtonState(); // CHECK SAVE FILE ON START
     }
 
     private void InitializeMenu()
@@ -62,11 +62,7 @@ public class MenuManager : MonoBehaviour
             colsSlider.onValueChanged.AddListener(OnColsChanged);
         }
 
-        // Setup sound sliders
-        
-
         UpdateGridSizeDisplay();
-       
     }
 
     private void SetupButtonListeners()
@@ -80,10 +76,12 @@ public class MenuManager : MonoBehaviour
         if (backToMenuButton != null)
             backToMenuButton.onClick.AddListener(ShowMainMenu);
 
-       
-
         if (quitButton != null)
             quitButton.onClick.AddListener(QuitGame);
+
+        // ADD LOAD GAME BUTTON LISTENER
+        if (loadGameButton != null)
+            loadGameButton.onClick.AddListener(LoadGame);
     }
 
     private void LoadSettings()
@@ -109,6 +107,97 @@ public class MenuManager : MonoBehaviour
         PlayerPrefs.SetInt("GridRows", currentRows);
         PlayerPrefs.SetInt("GridCols", currentCols);
         PlayerPrefs.Save();
+    }
+
+    // ADD THIS NEW METHOD FOR LOADING SAVED GAMES
+    public void LoadGame()
+    {
+        Debug.Log("Load Game button clicked from menu");
+
+        if (!SaveSystem.HasSaveFile())
+        {
+            Debug.LogError("No saved game found!");
+            ShowTemporaryMessage("No saved game found!", 2f);
+            PlayButtonSound();
+            return;
+        }
+
+        GameState state = SaveSystem.Load();
+        if (state == null)
+        {
+            Debug.LogError("Failed to load game state!");
+            ShowTemporaryMessage("Failed to load game!", 2f);
+            PlayButtonSound();
+            return;
+        }
+
+        Debug.Log($"Loaded state: rows={state.rows}, cols={state.cols}, score={state.score}, cards={state.cards?.Count ?? 0}");
+
+        // Update menu settings to match saved game
+        currentRows = state.rows;
+        currentCols = state.cols;
+
+        if (rowsSlider != null) rowsSlider.value = currentRows;
+        if (colsSlider != null) colsSlider.value = currentCols;
+        UpdateGridSizeDisplay();
+
+        // Ensure GameManager exists and is properly set up
+        if (GameManager.Instance == null)
+        {
+            Debug.LogError("GameManager.Instance is null! Make sure GameManager is in the scene.");
+            ShowTemporaryMessage("Game system error!", 2f);
+            return;
+        }
+
+        // Switch to game panel FIRST
+        ShowGame();
+
+        // Small delay to ensure UI is active before loading
+        StartCoroutine(LoadGameDelayed(state));
+
+        PlayButtonSound();
+    }
+
+    // ADD THIS COROUTINE TO HANDLE DELAYED LOADING
+    private System.Collections.IEnumerator LoadGameDelayed(GameState state)
+    {
+        yield return new WaitForEndOfFrame(); // Wait one frame for UI to be active
+
+        // Load the saved game state
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.LoadState(state);
+            Debug.Log($"Game loaded from menu: Score={state.score}, Combo={state.combo}");
+        }
+        else
+        {
+            Debug.LogError("GameManager.Instance is still null after delay!");
+        }
+    }
+
+    // ADD THIS METHOD TO UPDATE LOAD BUTTON STATE
+    public void UpdateLoadButtonState()
+    {
+        if (loadGameButton != null)
+        {
+            bool hasSave = SaveSystem.HasSaveFile();
+            loadGameButton.interactable = hasSave;
+
+            // Optional: Change button text or color based on availability
+            var buttonText = loadGameButton.GetComponentInChildren<TMP_Text>();
+            if (buttonText != null)
+            {
+                buttonText.color = hasSave ? Color.white : Color.gray;
+            }
+        }
+    }
+
+    // ADD TEMPORARY MESSAGE FUNCTIONALITY
+    private void ShowTemporaryMessage(string message, float duration)
+    {
+        Debug.Log(message); // For now, just log it
+        // If you have a message UI system, implement it here
+        // You can copy the implementation from UIManager if needed
     }
 
     #region UI Event Handlers
@@ -185,13 +274,13 @@ public class MenuManager : MonoBehaviour
     public void ShowMainMenu()
     {
         SetActivePanel(mainMenuPanel);
+        UpdateLoadButtonState(); // UPDATE LOAD BUTTON WHEN RETURNING TO MENU
         PlayButtonSound();
     }
 
     public void ShowSettings()
     {
         SetActivePanel(settingsPanel);
-        ;
         PlayButtonSound();
     }
 
@@ -259,12 +348,9 @@ public class MenuManager : MonoBehaviour
         if (SoundManager.Instance != null)
         {
             SoundManager.Instance.ToggleSound();
-            
             PlayButtonSound();
         }
     }
-
- 
 
     private void PlayButtonSound()
     {
@@ -318,6 +404,12 @@ public class MenuManager : MonoBehaviour
         UpdateGridSizeDisplay();
         if (rowsSlider != null) rowsSlider.value = currentRows;
         if (colsSlider != null) colsSlider.value = currentCols;
+    }
+
+    [ContextMenu("Test Load Game")]
+    private void TestLoadGame()
+    {
+        LoadGame();
     }
 #endif
 

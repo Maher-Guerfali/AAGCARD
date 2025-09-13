@@ -264,17 +264,54 @@ public class GameManager : MonoBehaviour
         return gridBuilder.CaptureState(score, combo);
     }
 
+    // Replace the LoadState method in your GameManager with this updated version:
+
     public void LoadState(GameState state)
     {
-        // Use 'this.' to explicitly reference the class fields
+        if (state == null)
+        {
+            Debug.LogError("Cannot load null game state");
+            return;
+        }
+
+        Debug.Log($"Loading game state: Score={state.score}, Combo={state.combo}, Cards={state.cards?.Count ?? 0}");
+
+        // Clear any existing game state
+        compareQueue.Clear();
+        comparing = false;
+
+        // Update the game settings to match saved state
+        rows = state.rows;
+        cols = state.cols;
+
+        // Update GridBuilder settings
+        if (gridBuilder != null && gridBuilder.settings != null)
+        {
+            gridBuilder.settings.rows = state.rows;
+            gridBuilder.settings.cols = state.cols;
+        }
+
+        // Set score and combo
         this.score = state.score;
         this.combo = state.combo;
+
+        // Update UI immediately
+        uiManager?.UpdateScore(this.score, this.combo);
+
+        // FIRST: Build the grid with cards, THEN restore their states
+        Debug.Log("Building grid for loaded game...");
+        gridBuilder.BuildGrid(cardPrefab, gridContainer);
+
+        // SECOND: Apply the saved states to the newly created cards
+        Debug.Log("Restoring card states...");
+        gridBuilder.RestoreState(state);
+
+        // Set game state flags AFTER everything is built
         gameStarted = true;
         previewActive = false;
-        uiManager?.UpdateScore(this.score, this.combo);
-        gridBuilder.RestoreState(state);
-    }
 
+        Debug.Log($"Game state loaded successfully. Final score: {this.score}, combo: {this.combo}");
+    }
     // --- Public Properties for UI ---
     public bool IsGameStarted => gameStarted;
     public bool IsPreviewActive => previewActive;

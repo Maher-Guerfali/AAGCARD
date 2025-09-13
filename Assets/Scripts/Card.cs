@@ -104,14 +104,32 @@ public class Card : MonoBehaviour,
     }
 
     // Called by GameManager when cards match
+
     public void MarkMatched()
     {
         Debug.Log($"Card {faceId} marked as matched");
         IsMatched = true;
+        IsRevealed = true; // Ensure it stays revealed
         isInteractable = false;
+
+        // Stop any ongoing mismatch animations
+        if (mismatchCoroutine != null)
+        {
+            StopCoroutine(mismatchCoroutine);
+            mismatchCoroutine = null;
+        }
+
+        // Ensure the card is showing its front face
+        if (frontImage) frontImage.gameObject.SetActive(true);
+        if (backImage) backImage.gameObject.SetActive(false);
+
+        // Make sure flip root is at normal scale (not flipped)
+        if (flipRoot != null) flipRoot.localScale = Vector3.one;
 
         // Return to base scale smoothly
         AnimateToScale(baseScale, 0.25f);
+
+        Debug.Log($"Card {faceId} matched state applied - front visible, not interactable");
     }
 
     // Called by GameManager when cards don't match

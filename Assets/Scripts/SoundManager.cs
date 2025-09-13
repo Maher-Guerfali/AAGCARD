@@ -37,20 +37,7 @@ public class SoundManager : MonoBehaviour
 
     private void InitializeAudioSources()
     {
-        // Create audio sources if they don't exist
-        if (sfxSource == null)
-        {
-            sfxSource = gameObject.AddComponent<AudioSource>();
-            sfxSource.playOnAwake = false;
-            sfxSource.loop = false;
-        }
-
-        if (musicSource == null)
-        {
-            musicSource = gameObject.AddComponent<AudioSource>();
-            musicSource.playOnAwake = false;
-            musicSource.loop = true;
-        }
+      
 
         UpdateVolumes();
     }
